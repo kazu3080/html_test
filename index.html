@@ -1,0 +1,462 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Nova Chat</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f4f4f4;
+            margin: 0;
+            padding: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+        }
+        .container {
+            width: 400px;
+            background-color: #fff;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+            border-radius: 8px;
+            overflow: hidden;
+        }
+        .header {
+            background-color: #007bff;
+            color: #fff;
+            padding: 10px;
+            text-align: center;
+        }
+        .form-container, .chat-container {
+            padding: 20px;
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+        }
+        .form-container input, .chat-input input {
+            width: calc(100% - 22px);
+            padding: 10px;
+            margin-bottom: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        .form-container button, .chat-input button {
+            width: 100%;
+            padding: 10px;
+            border: none;
+            background-color: #007bff;
+            color: #fff;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        .chat-messages {
+            flex: 1;
+            overflow-y: scroll;
+            padding: 10px;
+            border-bottom: 1px solid #ddd;
+            display: flex;
+            flex-direction: column;
+        }
+        .chat-message {
+            margin-bottom: 10px;
+            padding: 10px;
+            border-radius: 10px;
+            max-width: 70%;
+            word-wrap: break-word;
+        }
+        .chat-message.user {
+            align-self: flex-end;
+            background-color: #dcf8c6;
+        }
+        .friends-list, .rooms-list {
+            margin-top: 20px;
+        }
+        .friend, .room {
+            padding: 5px;
+            border-bottom: 1px solid #ddd;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .friend button, .room button {
+            padding: 5px 10px;
+            border: none;
+            background-color: #007bff;
+            color: #fff;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        .friend img {
+            width: 30px;
+            height: 30px;
+            border-radius: 50%;
+            margin-right: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container" id="container">
+        <div class="header">
+            Nova Chat
+        </div>
+        <div class="form-container" id="form-container">
+            <input type="email" id="email" placeholder="メールアドレス">
+            <input type="text" id="nickname" placeholder="ニックネーム">
+            <input type="password" id="password" placeholder="パスワード">
+            <button onclick="register()">登録</button>
+            <button onclick="login()">ログイン</button>
+            <button onclick="forgotPassword()">パスワードを忘れた</button>
+        </div>
+        <div class="chat-container" id="chat-container" style="display: none;">
+            <div class="chat-messages" id="chat-messages"></div>
+            <div class="chat-input">
+                <input type="text" id="chat-input" placeholder="メッセージを入力">
+                <button onclick="sendMessage()">送信</button>
+                <input type="file" id="file-input" accept="image/*,video/*,video/quicktime,application/pdf,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.openxmlformats-officedocument.presentationml.presentation" multiple>
+                <button onclick="sendFile()">ファイル送信</button>
+                <button onclick="addFriend()">友達追加</button>
+                <input type="text" id="friend-search" placeholder="友達を検索">
+                <button onclick="searchFriend()">検索</button>
+                <button onclick="createRoom()">部屋を作成</button>
+                <button onclick="changeNickname()">ニックネーム変更</button>
+                <button onclick="changeEmail()">メールアドレス変更</button>
+            </div>
+            <div class="friends-list" id="friends-list">
+                <h3>友達リスト</h3>
+            </div>
+            <div class="rooms-list" id="rooms-list">
+                <h3>部屋リスト</h3>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let currentUser = null;
+        let currentChatFriend = null;
+        let currentRoom = null;
+
+        function register() {
+            const email = document.getElementById('email').value.trim();
+            const nickname = document.getElementById('nickname').value.trim();
+            const password = document.getElementById('password').value.trim();
+            if (email && nickname && password) {
+                const users = JSON.parse(localStorage.getItem('users')) || {};
+                if (users[email]) {
+                    alert('このメールアドレスは既に使用されています');
+                } else {
+                    users[email] = { password, nickname, friends: [], rooms: [] };
+                    localStorage.setItem('users', JSON.stringify(users));
+                    alert('登録が完了しました');
+                }
+            } else {
+                alert('メールアドレス、ニックネーム、パスワードを入力してください');
+            }
+        }
+
+        function login() {
+            const email = document.getElementById('email').value.trim();
+            const password = document.getElementById('password').value.trim();
+            const users = JSON.parse(localStorage.getItem('users')) || {};
+            if (users[email] && users[email].password === password) {
+                alert('ログイン成功');
+                currentUser = users[email];
+                currentUser.email = email;
+                document.getElementById('form-container').style.display = 'none';
+                document.getElementById('chat-container').style.display = 'block';
+                displayFriends();
+                displayRooms();
+            } else {
+                alert('メールアドレスまたはパスワードが間違っています');
+            }
+        }
+
+        function forgotPassword() {
+            const email = document.getElementById('email').value.trim();
+            const users = JSON.parse(localStorage.getItem('users')) || {};
+            if (users[email]) {
+                const newPassword = prompt('新しいパスワードを入力してください:');
+                if (newPassword) {
+                    users[email].password = newPassword;
+                    localStorage.setItem('users', JSON.stringify(users));
+                    alert('パスワードがリセットされました');
+                } else {
+                    alert('パスワードは空にできません');
+                }
+            } else {
+                alert('メールアドレスが見つかりません');
+            }
+        }
+
+        function addFriend() {
+            const friendEmail = prompt('追加する友達のメールアドレスを入力してください:');
+            if (friendEmail) {
+                const users = JSON.parse(localStorage.getItem('users')) || {};
+                if (users[friendEmail]) {
+                    if (!currentUser.friends.includes(friendEmail)) {
+                        currentUser.friends.push(friendEmail);
+                        users[currentUser.email] = currentUser;
+                        localStorage.setItem('users', JSON.stringify(users));
+                        alert(`${friendEmail} が友達リストに追加されました`);
+                        displayFriends();
+                    } else {
+                        alert('このユーザーは既に友達リストに追加されています');
+                    }
+                } else {
+                    alert('メールアドレスが見つかりません');
+                }
+            } else {
+                alert('メールアドレスを入力してください');
+            }
+        }
+
+        function searchFriend() {
+            const friendEmail = document.getElementById('friend-search').value.trim();
+            if (friendEmail) {
+                const users = JSON.parse(localStorage.getItem('users')) || {};
+                if (users[friendEmail]) {
+                    alert(`${friendEmail} が見つかりました`);
+                    // Here you can add code to display the friend's information
+                } else {
+                    alert('メールアドレスが見つかりません');
+                }
+            } else {
+                alert('メールアドレスを入力してください');
+            }
+        }
+
+        function sendMessage() {
+            const input = document.getElementById('chat-input');
+            const message = input.value.trim();
+            if (message) {
+                const messageContainer = document.createElement('div');
+                messageContainer.classList.add('chat-message', 'user');
+                messageContainer.textContent = `${currentUser.nickname}: ${message}`;
+                document.getElementById('chat-messages').appendChild(messageContainer);
+                input.value = '';
+                input.focus();
+                // Scroll to the bottom of the chat
+                const chatMessages = document.getElementById('chat-messages');
+                chatMessages.scrollTop = chatMessages.scrollHeight;
+            }
+        }
+
+        function sendFile() {
+            const fileInput = document.getElementById('file-input');
+            const files = fileInput.files;
+            if (files.length > 0) {
+                Array.from(files).forEach(file => {
+                    const reader = new FileReader();
+                    reader.onload = function(e) {
+                        const messageContainer = document.createElement('div');
+                        messageContainer.classList.add('chat-message', 'user');
+                        if (file.type.startsWith('image/') || file.type === 'image/gif') {
+                            const img = document.createElement('img');
+                            img.src = e.target.result;
+                            img.style.maxWidth = '100%';
+                            messageContainer.appendChild(img);
+                        } else if (file.type.startsWith('video/')) {
+                            const video = document.createElement('video');
+                            video.src = e.target.result;
+                            video.controls = true;
+                            video.style.maxWidth = '100%';
+                            messageContainer.appendChild(video);
+                        } else if (file.type === 'application/pdf' || file.type === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' || file.type === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' || file.type === 'application/vnd.openxmlformats-officedocument.presentationml.presentation') {
+                            const link = document.createElement('a');
+                            link.href = e.target.result;
+                            link.textContent = file.name;
+                            link.download = file.name;
+                            messageContainer.appendChild(link);
+                        }
+                        document.getElementById('chat-messages').appendChild(messageContainer);
+                        // Scroll to the bottom of the chat
+                        const chatMessages = document.getElementById('chat-messages');
+                        chatMessages.scrollTop = chatMessages.scrollHeight;
+                    };
+                    reader.readAsDataURL(file);
+                });
+                fileInput.value = '';
+            } else {
+                alert('ファイルを選択してください');
+            }
+        }
+
+        function displayFriends() {
+            const friendsList = document.getElementById('friends-list');
+            friendsList.innerHTML = '<h3>友達リスト</h3>';
+            currentUser.friends.forEach(friendEmail => {
+                const users = JSON.parse(localStorage.getItem('users')) || {};
+                const friendNickname = users[friendEmail].nickname;
+                const friendDiv = document.createElement('div');
+                friendDiv.classList.add('friend');
+                friendDiv.innerHTML = `
+                    <span>${friendNickname} (${friendEmail})</span>
+                    <button onclick="startChatWithFriend('${friendEmail}', '${friendNickname}')">DM</button>
+                    <button onclick="sendFileToFriend('${friendEmail}')">ファイル送信</button>
+                    <button onclick="confirmDeleteFriend('${friendEmail}')">削除</button>
+                `;
+                friendsList.appendChild(friendDiv);
+            });
+        }
+
+        function displayRooms() {
+            const roomsList = document.getElementById('rooms-list');
+            roomsList.innerHTML = '<h3>部屋リスト</h3>';
+            currentUser.rooms.forEach(roomName => {
+                const roomDiv = document.createElement('div');
+                roomDiv.classList.add('room');
+                roomDiv.innerHTML = `
+                    <span>${roomName}</span>
+                    <button onclick="joinRoom('${roomName}')">参加</button>
+                `;
+                roomsList.appendChild(roomDiv);
+            });
+        }
+
+        function createRoom() {
+            const roomName = prompt('作成する部屋の名前を入力してください:');
+            if (roomName) {
+                if (!currentUser.rooms.includes(roomName)) {
+                    currentUser.rooms.push(roomName);
+                    const users = JSON.parse(localStorage.getItem('users')) || {};
+                    users[currentUser.email] = currentUser;
+                    localStorage.setItem('users', JSON.stringify(users));
+                    alert(`${roomName} が作成されました`);
+                    displayRooms();
+                } else {
+                    alert('この部屋は既に存在します');
+                }
+            } else {
+                alert('部屋の名前を入力してください');
+            }
+        }
+
+        function joinRoom(roomName) {
+            currentRoom = roomName;
+            currentChatFriend = null;
+            document.getElementById('chat-messages').innerHTML = `<h3>${roomName} とのチャット</h3>`;
+        }
+
+        function startChatWithFriend(friendEmail, friendNickname) {
+            currentChatFriend = friendEmail;
+            currentRoom = null;
+            document.getElementById('chat-messages').innerHTML = `<h3>${friendNickname} (${friendEmail}) とのチャット</h3>`;
+        }
+
+        function sendFileToFriend(friendEmail) {
+            const fileInput = document.createElement('input');
+            fileInput.type = 'file';
+            fileInput.accept = 'image/*,video/*,video/quicktime,application/pdf,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.openxmlformats-officedocument.presentationml.presentation';
+            fileInput.multiple = true;
+            fileInput.onchange = function() {
+                const files = fileInput.files;
+                if (files.length > 0) {
+                    Array.from(files).forEach(file => {
+                        const reader = new FileReader();
+                        reader.onload = function(e) {
+                            const messageContainer = document.createElement('div');
+                            messageContainer.classList.add('chat-message', 'user');
+                            if (file.type.startsWith('image/') || file.type === 'image/gif') {
+                                const img = document.createElement('img');
+                                img.src = e.target.result;
+                                img.style.maxWidth = '100%';
+                                messageContainer.appendChild(img);
+                            } else if (file.type.startsWith('video/')) {
+                                const video = document.createElement('video');
+                                video.src = e.target.result;
+                                video.controls = true;
+                                video.style.maxWidth = '100%';
+                                messageContainer.appendChild(video);
+                            } else if (file.type === 'application/pdf' || file.type === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' || file.type === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' || file.type === 'application/vnd.openxmlformats-officedocument.presentationml.presentation') {
+                                const link = document.createElement('a');
+                                link.href = e.target.result;
+                                link.textContent = file.name;
+                                link.download = file.name;
+                                messageContainer.appendChild(link);
+                            }
+                            document.getElementById('chat-messages').appendChild(messageContainer);
+                            // Scroll to the bottom of the chat
+                            const chatMessages = document.getElementById('chat-messages');
+                            chatMessages.scrollTop = chatMessages.scrollHeight;
+                        };
+                        reader.readAsDataURL(file);
+                    });
+                }
+            };
+            fileInput.click();
+        }
+
+        function changeNickname() {
+            const newNickname = prompt('新しいニックネームを入力してください:');
+            if (newNickname) {
+                currentUser.nickname = newNickname;
+                const users = JSON.parse(localStorage.getItem('users')) || {};
+                users[currentUser.email] = currentUser;
+                localStorage.setItem('users', JSON.stringify(users));
+                alert('ニックネームが変更されました');
+                displayFriends();
+            } else {
+                alert('ニックネームを入力してください');
+            }
+        }
+
+        function changeEmail() {
+            const newEmail = prompt('新しいメールアドレスを入力してください:');
+            if (newEmail) {
+                const users = JSON.parse(localStorage.getItem('users')) || {};
+                if (users[newEmail]) {
+                    alert('このメールアドレスは既に使用されています');
+                } else {
+                    delete users[currentUser.email];
+                    currentUser.email = newEmail;
+                    users[newEmail] = currentUser;
+                    localStorage.setItem('users', JSON.stringify(users));
+                    alert('メールアドレスが変更されました');
+                    displayFriends();
+                }
+            } else {
+                alert('メールアドレスを入力してください');
+            }
+        }
+
+        function changeIcon() {
+            const fileInput = document.createElement('input');
+            fileInput.type = 'file';
+            fileInput.accept = 'image/*';
+            fileInput.onchange = function() {
+                const file = fileInput.files[0];
+                if (file) {
+                    const reader = new FileReader();
+                    reader.onload = function(e) {
+                        currentUser.icon = e.target.result;
+                        const users = JSON.parse(localStorage.getItem('users')) || {};
+                        users[currentUser.email] = currentUser;
+                        localStorage.setItem('users', JSON.stringify(users));
+                        alert('アイコンが変更されました');
+                        displayFriends();
+                    };
+                    reader.readAsDataURL(file);
+                }
+            };
+            fileInput.click();
+        }
+
+        function confirmDeleteFriend(friendEmail) {
+            if (confirm('本当に ' + friendEmail + ' を友達リストから削除しますか？')) {
+                deleteFriend(friendEmail);
+            }
+        }
+
+        function deleteFriend(friendEmail) {
+            if (confirm('削除してよろしいですか？')) {
+                currentUser.friends = currentUser.friends.filter(email => email !== friendEmail);
+                const users = JSON.parse(localStorage.getItem('users')) || {};
+                users[currentUser.email] = currentUser;
+                localStorage.setItem('users', JSON.stringify(users));
+                alert(`${friendEmail} が友達リストから削除されました`);
+                displayFriends();
+            }
+        }
+    </script>
+</body>
+</html>
